@@ -24,8 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: أدوات الصور
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq librsvg2-bin imagemagick >/dev/null
+        run: npm install --prefix /tmp/imgtool --no-audit --no-fund --no-save sharp@0.33
 
       - name: توليد الأيقونات (إن كان مجلد icons ناقصاً)
         run: |
@@ -48,15 +52,22 @@ jobs:
           </svg>
           SVG
           fi
-          r() { [ -f "icons/$2" ] || rsvg-convert -w "$1" -h "$1" icons/icon.svg -o "icons/$2"; }
-          r 512 icon-512.png
-          r 192 icon-192.png
-          r 180 apple-touch-icon.png
-          r 32  favicon-32.png
-          if [ ! -f icons/maskable-512.png ]; then
-            rsvg-convert -w 400 -h 400 icons/icon.svg -o /tmp/inner.png
-            convert -size 512x512 xc:'#060A17' /tmp/inner.png -gravity center -composite icons/maskable-512.png
-          fi
+          cat > /tmp/imgtool/icons.js <<'JS'
+          const sharp = require('sharp'); const fs = require('fs');
+          const svg = fs.readFileSync('icons/icon.svg');
+          const sizes = { 'icon-512.png': 512, 'icon-192.png': 192, 'apple-touch-icon.png': 180, 'favicon-32.png': 32 };
+          (async () => {
+            for (const [f, n] of Object.entries(sizes)) {
+              if (!fs.existsSync('icons/' + f)) await sharp(svg, { density: 300 }).resize(n, n).png().toFile('icons/' + f);
+            }
+            if (!fs.existsSync('icons/maskable-512.png')) {
+              const inner = await sharp(svg, { density: 300 }).resize(400, 400).png().toBuffer();
+              await sharp({ create: { width: 512, height: 512, channels: 4, background: '#060A17' } })
+                .composite([{ input: inner, gravity: 'center' }]).png().toFile('icons/maskable-512.png');
+            }
+          })().catch((e) => { console.error(e); process.exit(1); });
+          JS
+          NODE_PATH=/tmp/imgtool/node_modules node /tmp/imgtool/icons.js
           ls -la icons
 
       - name: تجميع ملفات الموقع
@@ -143,16 +154,17 @@ jobs:
 
       - name: أيقونة التطبيق
         run: |
-          sudo apt-get install -y -qq imagemagick >/dev/null
+          npm install --no-audit --no-fund --no-save sharp@0.33
           RES=android/app/src/main/res
           rm -rf "$RES/mipmap-anydpi-v26"
           for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
             name=${d%%:*}; size=${d##*:}
             mkdir -p "$RES/mipmap-$name"
-            convert www/icons/icon-512.png -resize ${size}x${size} "$RES/mipmap-$name/ic_launcher.png"
+            node -e "require('sharp')('www/icons/icon-512.png').resize($size,$size).png().toFile('$RES/mipmap-$name/ic_launcher.png').catch(e=>{console.error(e);process.exit(1)})"
             cp "$RES/mipmap-$name/ic_launcher.png" "$RES/mipmap-$name/ic_launcher_round.png"
             rm -f "$RES/mipmap-$name/ic_launcher_foreground.png"
           done
+          ls -la "$RES/mipmap-xxxhdpi"
 
       - name: بناء APK
         run: |
