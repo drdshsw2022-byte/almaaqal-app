@@ -19,7 +19,7 @@ jobs:
   # 1) تجهيز ملفات الموقع + توليد الأيقونات تلقائياً إن لم تكن موجودة
   # ------------------------------------------------------------------
   site:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -89,7 +89,7 @@ jobs:
   # ------------------------------------------------------------------
   pages:
     needs: site
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
       name: github-pages
@@ -117,7 +117,7 @@ jobs:
   # ------------------------------------------------------------------
   android:
     needs: site
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/download-artifact@v4
@@ -135,6 +135,8 @@ jobs:
           java-version: '17'
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       - name: إنشاء مشروع أندرويد
         run: |
