@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "جامعة المعقل الأهلية · الأمن السيبراني",
+  "short_name": "المعقل",
+  "description": "البوابة الموحدة لقسم هندسة الأمن السيبراني: التطبيق، المحاضرات، الحضور، الدرجات ومنصة الاختبارات.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#060A17",
+  "theme_color": "#0C1224",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "منصة الاختبارات", "short_name": "الاختبارات", "url": "./#ex", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "تحميل التطبيق", "short_name": "التحميل", "url": "./#dl", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
