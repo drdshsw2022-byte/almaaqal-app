@@ -1,5 +1,5 @@
 /* Al-Maaqal PWA Service Worker — يعمل بدون إنترنت بعد أول فتح */
-const VERSION = 'amu-v1.0.0';
+const VERSION = 'amu-v1.0.1';
 const CORE = [
   './',
   './index.html',
