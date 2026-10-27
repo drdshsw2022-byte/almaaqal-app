@@ -4,6 +4,13 @@ on:
   push:
     branches: [main, master]
   workflow_dispatch:
+  schedule:
+    # مزامنة يومية لنسخة الويب مع it-basra.com/amu (6 صباحاً بتوقيت بغداد)
+    - cron: '7 3 * * *'
+
+env:
+  LIVE_BASE: https://it-basra.com/amu
+  LIVE_FILES: index.html app.css sw.js offline.html manifest.webmanifest announcements.json icons/icon.svg icons/icon-192.png icons/icon-512.png icons/maskable-512.png icons/apple-touch-icon.png icons/favicon-32.png
 
 permissions:
   contents: write
@@ -27,6 +34,42 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: مزامنة الملفات من الموقع الرسمي it-basra.com/amu
+        id: sync
+        run: |
+          mkdir -p /tmp/live/icons
+          ok=1
+          for f in $LIVE_FILES; do
+            if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 60 -A "Mozilla/5.0 (almaaqal-app sync)" "$LIVE_BASE/$f" -o "/tmp/live/$f"; then
+              echo "::warning::تعذّر تنزيل $f من $LIVE_BASE"
+              ok=0
+            fi
+          done
+          if [ "$ok" = 1 ] && grep -qi '<html' /tmp/live/index.html && python3 -c "import json;json.load(open('/tmp/live/manifest.webmanifest',encoding='utf-8'));json.load(open('/tmp/live/announcements.json',encoding='utf-8'))"; then
+            mkdir -p icons
+            cp -r /tmp/live/. .
+            echo "synced=1" >> "$GITHUB_OUTPUT"
+            echo "تمت المزامنة من $LIVE_BASE"
+          else
+            echo "synced=0" >> "$GITHUB_OUTPUT"
+            echo "::warning::تعذّرت المزامنة، استُخدمت الملفات الموجودة في المستودع"
+          fi
+          grep -o "VERSION = '[^']*'" sw.js || true
+
+      - name: حفظ النسخة المحدّثة في المستودع
+        if: steps.sync.outputs.synced == '1'
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html app.css sw.js offline.html manifest.webmanifest announcements.json icons
+          if git diff --cached --quiet; then
+            echo "لا تغييرات جديدة"
+          else
+            git commit -m "مزامنة تلقائية من it-basra.com/amu"
+            git push
+          fi
 
       - name: أدوات الصور
         run: npm install --prefix /tmp/imgtool --no-audit --no-fund --no-save sharp@0.33
@@ -73,7 +116,9 @@ jobs:
       - name: تجميع ملفات الموقع
         run: |
           mkdir -p site
-          cp index.html app.css sw.js offline.html manifest.webmanifest site/
+          for f in index.html app.css sw.js offline.html manifest.webmanifest announcements.json; do
+            if [ -f "$f" ]; then cp "$f" site/; else echo "::warning::الملف $f غير موجود"; fi
+          done
           cp -r icons site/
           touch site/.nojekyll
           ls -la site
@@ -117,6 +162,8 @@ jobs:
   # ------------------------------------------------------------------
   android:
     needs: site
+    # المزامنة اليومية تحدّث الويب فقط؛ التطبيق يقرأ الموقع مباشرة فلا يحتاج إعادة بناء
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -143,16 +190,26 @@ jobs:
           rm -f www/.nojekyll
           npm init -y >/dev/null
           npm install --no-audit --no-fund @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+          # التطبيق يفتح الموقع الرسمي مباشرة، فأي تحديث على it-basra.com/amu يظهر فوراً دون إعادة بناء.
+          # بعد أول تشغيل يعمل بدون إنترنت (النسخة المحفوظة)، وعند تعذّر الاتصال تظهر صفحة offline.html المضمّنة.
           cat > capacitor.config.json <<'JSON'
           {
             "appId": "iq.edu.almaaqal.cyber",
             "appName": "المعقل",
             "webDir": "www",
+            "server": {
+              "url": "https://it-basra.com/amu/",
+              "allowNavigation": ["it-basra.com"],
+              "errorPath": "offline.html"
+            },
             "android": { "backgroundColor": "#060A17" }
           }
           JSON
           npx cap add android
           npx cap sync android
+          # رقم إصدار يزيد مع كل بناء حتى يقبله أندرويد كتحديث
+          sed -i -E "s/versionCode [0-9]+/versionCode ${{ github.run_number }}/; s/versionName \"[^\"]*\"/versionName \"2.2.${{ github.run_number }}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
 
       - name: أيقونة التطبيق
         run: |
@@ -179,7 +236,7 @@ jobs:
           done
           cd ..
           mkdir -p dist
-          cp android/app/build/outputs/apk/debug/app-debug.apk dist/almaqal-12.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk dist/almaqal-app.apk
           ls -la dist
 
       - name: رفع الملف كـ Artifact
@@ -194,8 +251,9 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: نسخة رقم ${{ github.run_number }}
           body: |
-            تطبيق جامعة المعقل الأهلية - قسم هندسة الأمن السيبراني.
-            حمّل ملف almaqal-12.apk على هاتف أندرويد وثبّته.
-            لآيفون والكمبيوتر استخدم نسخة الويب على GitHub Pages.
+            بوابة قسم هندسة الأمن السيبراني - جامعة المعقل الدولية.
+            حمّل ملف almaqal-app.apk على هاتف أندرويد وثبّته.
+            التطبيق يعرض الموقع الرسمي it-basra.com/amu مباشرة، فيصله كل تحديث تلقائياً.
+            لآيفون والكمبيوتر: https://it-basra.com/amu/ (زر «تثبيت البوابة»).
           files: dist/*.apk
           make_latest: true
